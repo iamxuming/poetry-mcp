@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "poetry-mcp",
+  "main": "src/index.js",
+  "compatibility_date": "2025-04-01",
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "POETRY_API_BASE": "https://poetry.palemoky.com"
+  }
+}
