@@ -1,0 +1,15 @@
+{
+  "name": "poetry-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "面向 ChatGPT 和其他 MCP 客户端的中国古诗词查询服务",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
