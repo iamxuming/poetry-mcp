@@ -217,6 +217,77 @@ const TOOL_DEFINITIONS = [
   }
 ];
 
+
+function poetryAppHtml() {
+  return \`<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>古诗词查询</title>
+<style>
+:root{--ink:#211d18;--muted:#756d62;--paper:#f8f3e8;--red:#b83a2b;--line:#d9c9ae}
+*{box-sizing:border-box}body{margin:0;color:var(--ink);background:var(--paper);font-family:"Noto Serif SC","Songti SC",serif}
+main{min-height:100vh;padding:42px 24px;background:linear-gradient(145deg,#fbf8efcc,#efe6d5dd)}
+.wrap{max-width:1050px;margin:auto}.brand{font-size:26px;font-weight:700}.brand b{display:inline-grid;place-items:center;width:46px;height:46px;margin-right:14px;border:2px solid var(--red);border-radius:9px;color:var(--red)}
+.hero{text-align:center;padding:55px 0 26px}.eyebrow{color:var(--red);letter-spacing:.35em}.hero h1{font-size:clamp(48px,8vw,88px);margin:24px 0 10px;font-weight:600}.sub{font-size:24px;color:var(--muted)}
+.search{display:flex;gap:10px;margin:34px auto 18px;padding:8px;border:1.5px solid var(--red);border-radius:18px;background:#fffaf1;box-shadow:0 12px 30px #6b4f2a18}
+.search input{flex:1;min-width:0;border:0;outline:0;background:transparent;padding:18px 20px;font-size:20px;color:var(--ink)}
+.search button{border:0;border-radius:12px;padding:0 48px;background:var(--red);color:white;font-size:22px;font-weight:700;cursor:pointer}
+.hot{text-align:center;color:var(--muted);margin-bottom:32px}.hot button{border:0;background:none;color:inherit;font:inherit;cursor:pointer;padding:5px 9px}.hot button:hover{color:var(--red)}
+.status{text-align:center;color:var(--muted);padding:30px}.results{display:grid;gap:18px}
+.poem{background:#fffaf1;border:1px solid var(--line);border-radius:18px;padding:26px 30px;box-shadow:0 8px 24px #5d452415}
+.meta{color:var(--red);font-size:15px}.poem h2{font-size:30px;margin:10px 0 18px}.lines{font-size:18px;line-height:2;white-space:pre-wrap}.error{color:#a52020}
+@media(max-width:640px){main{padding:22px 14px}.hero{padding-top:30px}.sub{font-size:18px}.search button{padding:0 24px}.poem{padding:22px}.poem h2{font-size:25px}}
+</style>
+</head>
+<body>
+<main><div class="wrap">
+<div class="brand"><b>诗</b>古诗词查询</div>
+<section class="hero"><div class="eyebrow">千年文脉 · 一键寻诗</div><h1>古诗词查询</h1><div class="sub">搜诗名、作者或诗句</div></section>
+<form id="searchForm" class="search"><input id="keyword" autocomplete="off" placeholder="例如：李白、蜀道难、床前明月光"><button>查询</button></form>
+<div class="hot">热门搜索：<button data-q="李白">李白</button> / <button data-q="柳永">柳永</button> / <button data-q="岳飞">岳飞</button> / <button data-q="蜀道难">蜀道难</button></div>
+<div id="status" class="status">输入关键词开始查询</div><section id="results" class="results"></section>
+</div></main>
+<script>
+const form=document.getElementById("searchForm"),input=document.getElementById("keyword"),statusEl=document.getElementById("status"),results=document.getElementById("results");
+document.querySelectorAll("[data-q]").forEach(function(btn){btn.addEventListener("click",function(){input.value=btn.dataset.q;search(btn.dataset.q)})});
+form.addEventListener("submit",function(e){e.preventDefault();search(input.value)});
+function addText(parent,tag,text,className){const el=document.createElement(tag);if(className)el.className=className;el.textContent=text;parent.appendChild(el);return el}
+async function search(raw){
+ const q=String(raw||"").trim();if(!q)return;
+ statusEl.className="status";statusEl.textContent="正在查询…";results.replaceChildren();
+ try{
+  const res=await fetch("/mcp",{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:Date.now(),method:"tools/call",params:{name:"search_poems",arguments:{query:q,search_type:"all",page:1,page_size:20}}})});
+  const json=await res.json(),tool=json.result;
+  if(!res.ok||tool&&tool.isError)throw new Error(tool&&tool.content&&tool.content[0]&&tool.content[0].text||"查询失败");
+  const poems=tool&&tool.structuredContent&&Array.isArray(tool.structuredContent.data)?tool.structuredContent.data:[];
+  if(!poems.length){statusEl.textContent="暂未找到相关诗词";return}
+  statusEl.textContent="找到 "+poems.length+" 条结果";
+  poems.forEach(function(p){
+   const card=document.createElement("article");card.className="poem";
+   const dynasty=p.dynasty&&p.dynasty.name||"未知朝代",author=p.author&&p.author.name||"佚名",type=p.type&&p.type.name||"";
+   addText(card,"div",dynasty+" · "+author+(type?" · "+type:""),"meta");
+   addText(card,"h2",p.title||"无题");
+   addText(card,"div",Array.isArray(p.content)?p.content.join("\\n"):String(p.content||""),"lines");
+   results.appendChild(card);
+  });
+ }catch(err){statusEl.className="status error";statusEl.textContent=err&&err.message||"查询失败，请稍后重试"}
+}
+</script>
+</body></html>\`;
+}
+
+function htmlResponse(html, status = 200) {
+  return new Response(html, {
+    status,
+    headers: corsHeaders({
+      "content-type": "text/html; charset=utf-8",
+      "content-security-policy": "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors *"
+    })
+  });
+}
+
 function corsHeaders(extra = {}) {
   return {
     "access-control-allow-origin": "*",
@@ -403,8 +474,12 @@ async function handleRequest(request, env) {
   const url = new URL(request.url);
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
 
+  if (request.method === "GET" && url.pathname === "/app") {
+    return htmlResponse(poetryAppHtml());
+  }
+
   if (request.method === "GET" && url.pathname === "/open") {
-    return Response.redirect("https://gushi.xumingtech.online", 302);
+    return Response.redirect(new URL("/app", url.origin), 302);
   }
 
   if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/health")) {
