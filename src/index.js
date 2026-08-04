@@ -397,6 +397,10 @@ async function handleRequest(request, env) {
   const url = new URL(request.url);
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
 
+  if (request.method === "GET" && url.pathname === "/open") {
+    return Response.redirect("https://gushi.xumingtech.online", 302);
+  }
+
   if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/health")) {
     return jsonResponse({
       ok: true,
