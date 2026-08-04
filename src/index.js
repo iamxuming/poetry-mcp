@@ -277,7 +277,7 @@ async function upstream(path, params, env) {
     data = { raw: text };
   }
   if (!response.ok) {
-    const detail = data?.error || data?.message || `上游接口返回 HTTP ${response.status}`;
+    const detail = data?.error?.message || data?.error || data?.message || `上游接口返回 HTTP ${response.status}`;
     throw new Error(String(detail));
   }
   return data;
@@ -316,7 +316,13 @@ export async function callTool(name, args = {}, env = {}) {
           page_size: String(clampInteger(args.page_size, 10, 1, 20)),
           lang: languageOf(args)
         });
-        const result = await upstream("/api/v1/poems/search", params, env);
+        let result;
+        try {
+          result = await upstream("/api/v1/poems/search", params, env);
+        } catch (error) {
+          if (!curatedMatches(query, searchType).length) throw error;
+          result = { data: [], pagination: { page: 1, pageSize: Number(params.get("page_size")), hasMore: false } };
+        }
         return toolSuccess(mergeCuratedSearch(result, query, searchType));
       }
       case "random_poem": {
