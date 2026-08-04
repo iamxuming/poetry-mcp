@@ -123,3 +123,19 @@ test("open route redirects to the poetry UI", async () => {
   assert.equal(response.status, 302);
   assert.equal(response.headers.get("location"), "https://gushi.xumingtech.online/");
 });
+
+
+test("curated author search survives an upstream error", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({
+    error: { code: "UPSTREAM_ERROR", message: "search unavailable" }
+  }), { status: 500, headers: { "content-type": "application/json" } }));
+
+  const result = await callTool("search_poems", {
+    query: "柳永",
+    search_type: "author"
+  }, { POETRY_API_BASE: "https://example.test" });
+
+  assert.equal(result.isError, false);
+  assert.equal(result.structuredContent.data[0].author.name, "柳永");
+  assert.equal(result.structuredContent.data[0].dynasty.name, "宋");
+});
