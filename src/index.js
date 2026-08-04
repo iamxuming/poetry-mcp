@@ -219,7 +219,7 @@ const TOOL_DEFINITIONS = [
 
 
 function poetryAppHtml() {
-  return \`<!doctype html>
+  return `<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -275,7 +275,7 @@ async function search(raw){
  }catch(err){statusEl.className="status error";statusEl.textContent=err&&err.message||"查询失败，请稍后重试"}
 }
 </script>
-</body></html>\`;
+</body></html>`;
 }
 
 function htmlResponse(html, status = 200) {
