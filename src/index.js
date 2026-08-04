@@ -3,6 +3,116 @@ const SERVER_VERSION = "1.0.0";
 const DEFAULT_API_BASE = "https://poetry.palemoky.com";
 const PROTOCOL_VERSION = "2025-06-18";
 
+const LEGACY_PATHS = {
+  "/api/v1/poems/search": "/api/search",
+  "/api/v1/poems/random": "/api/poems/random",
+  "/api/v1/authors": "/api/authors",
+  "/api/v1/dynasties": "/api/dynasties",
+  "/api/v1/types": "/api/types",
+  "/api/v1/stats": "/api/stats"
+};
+
+const CANONICAL_DYNASTIES = new Map([
+  ["李白", { id: 6, name: "唐" }],
+  ["柳永", { id: 8, name: "宋" }],
+  ["岳飞", { id: 8, name: "宋" }]
+]);
+
+const CURATED_POEMS = [
+  {
+    id: "curated-li-bai-shu-dao-nan",
+    title: "蜀道难",
+    content: [
+      "噫吁嚱，危乎高哉！蜀道之难，难于上青天！",
+      "蚕丛及鱼凫，开国何茫然！尔来四万八千岁，不与秦塞通人烟。",
+      "西当太白有鸟道，可以横绝峨眉巅。地崩山摧壮士死，然后天梯石栈相钩连。",
+      "上有六龙回日之高标，下有冲波逆折之回川。黄鹤之飞尚不得过，猿猱欲度愁攀援。",
+      "青泥何盘盘，百步九折萦岩峦。扪参历井仰胁息，以手抚膺坐长叹。",
+      "问君西游何时还？畏途巉岩不可攀。但见悲鸟号古木，雄飞雌从绕林间。",
+      "又闻子规啼夜月，愁空山。蜀道之难，难于上青天，使人听此凋朱颜！",
+      "连峰去天不盈尺，枯松倒挂倚绝壁。飞湍瀑流争喧豗，砯崖转石万壑雷。",
+      "其险也如此，嗟尔远道之人胡为乎来哉！",
+      "剑阁峥嵘而崔嵬，一夫当关，万夫莫开。所守或匪亲，化为狼与豺。",
+      "朝避猛虎，夕避长蛇；磨牙吮血，杀人如麻。锦城虽云乐，不如早还家。",
+      "蜀道之难，难于上青天，侧身西望长咨嗟！"
+    ],
+    author: { id: "curated-li-bai", name: "李白" },
+    dynasty: { id: 6, name: "唐" },
+    type: { id: 99, name: "乐府诗" },
+    source: "curated-fallback"
+  },
+  {
+    id: "curated-liu-yong-yu-lin-ling",
+    title: "雨霖铃·寒蝉凄切",
+    content: [
+      "寒蝉凄切，对长亭晚，骤雨初歇。都门帐饮无绪，留恋处，兰舟催发。",
+      "执手相看泪眼，竟无语凝噎。念去去，千里烟波，暮霭沉沉楚天阔。",
+      "多情自古伤离别，更那堪，冷落清秋节！今宵酒醒何处？杨柳岸，晓风残月。",
+      "此去经年，应是良辰好景虚设。便纵有千种风情，更与何人说？"
+    ],
+    author: { id: "curated-liu-yong", name: "柳永" },
+    dynasty: { id: 8, name: "宋" },
+    type: { id: 20, name: "宋词" },
+    source: "curated-fallback"
+  },
+  {
+    id: "curated-yue-fei-man-jiang-hong",
+    title: "满江红·怒发冲冠",
+    content: [
+      "怒发冲冠，凭栏处、潇潇雨歇。抬望眼、仰天长啸，壮怀激烈。",
+      "三十功名尘与土，八千里路云和月。莫等闲、白了少年头，空悲切。",
+      "靖康耻，犹未雪；臣子恨，何时灭？驾长车、踏破贺兰山缺。",
+      "壮志饥餐胡虏肉，笑谈渴饮匈奴血。待从头、收拾旧山河，朝天阙。"
+    ],
+    author: { id: "curated-yue-fei", name: "岳飞" },
+    dynasty: { id: 8, name: "宋" },
+    type: { id: 20, name: "宋词" },
+    source: "curated-fallback"
+  }
+];
+
+function normalizePoetryData(value) {
+  if (Array.isArray(value)) return value.map(normalizePoetryData);
+  if (!value || typeof value !== "object") return value;
+  const normalized = Object.fromEntries(
+    Object.entries(value).map(([key, child]) => [key, normalizePoetryData(child)])
+  );
+  const authorName = normalized.author?.name || (normalized.name && normalized.dynasty ? normalized.name : null);
+  const canonical = CANONICAL_DYNASTIES.get(authorName);
+  if (canonical) normalized.dynasty = { ...canonical };
+  if (normalized.type?.name === "宋词") normalized.dynasty = { id: 8, name: "宋" };
+  if (normalized.type?.name === "元曲") normalized.dynasty = { id: 9, name: "元" };
+  return normalized;
+}
+
+function curatedMatches(query, searchType) {
+  const needle = query.toLowerCase();
+  return CURATED_POEMS.filter((poem) => {
+    if (searchType === "title") return poem.title.toLowerCase().includes(needle);
+    if (searchType === "author") return poem.author.name.toLowerCase().includes(needle);
+    if (searchType === "content") return poem.content.some((line) => line.toLowerCase().includes(needle));
+    return poem.title.toLowerCase().includes(needle) ||
+      poem.author.name.toLowerCase().includes(needle) ||
+      poem.content.some((line) => line.toLowerCase().includes(needle));
+  });
+}
+
+function mergeCuratedSearch(data, query, searchType) {
+  const matches = curatedMatches(query, searchType);
+  if (!matches.length) return data;
+  const payload = data && typeof data === "object" ? { ...data } : {};
+  const upstreamItems = Array.isArray(payload.data) ? payload.data : [];
+  const seen = new Set(matches.map((poem) => `${poem.author.name}\u0000${poem.title}`));
+  payload.data = [
+    ...matches,
+    ...upstreamItems.filter((poem) => !seen.has(`${poem.author?.name || ""}\u0000${poem.title || ""}`))
+  ];
+  if (payload.pagination) {
+    payload.pagination = { ...payload.pagination, total: Math.max(payload.pagination.total || 0, payload.data.length) };
+  }
+  return payload;
+}
+
 const TOOL_DEFINITIONS = [
   {
     name: "search_poems",
@@ -149,9 +259,16 @@ async function upstream(path, params, env) {
   const url = new URL(path, `${base}/`);
   for (const [key, value] of params.entries()) url.searchParams.append(key, value);
 
-  const response = await fetch(url, {
+  let response = await fetch(url, {
     headers: { accept: "application/json", "user-agent": `${SERVER_NAME}/${SERVER_VERSION}` }
   });
+  if (response.status === 404 && LEGACY_PATHS[path]) {
+    url.pathname = LEGACY_PATHS[path];
+    response = await fetch(url, {
+      headers: { accept: "application/json", "user-agent": `${SERVER_NAME}/${SERVER_VERSION}` }
+    });
+  }
+
   const text = await response.text();
   let data;
   try {
@@ -167,6 +284,7 @@ async function upstream(path, params, env) {
 }
 
 function toolSuccess(data) {
+  data = normalizePoetryData(data);
   return {
     content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
     structuredContent: data,
@@ -198,7 +316,8 @@ export async function callTool(name, args = {}, env = {}) {
           page_size: String(clampInteger(args.page_size, 10, 1, 20)),
           lang: languageOf(args)
         });
-        return toolSuccess(await upstream("/api/v1/poems/search", params, env));
+        const result = await upstream("/api/v1/poems/search", params, env);
+        return toolSuccess(mergeCuratedSearch(result, query, searchType));
       }
       case "random_poem": {
         const character = String(args.character || "").trim();

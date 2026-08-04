@@ -40,3 +40,79 @@ test("HTTP endpoint accepts JSON-RPC", async () => {
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { jsonrpc: "2.0", id: 3, result: {} });
 });
+
+
+test("search falls back to the deployed legacy API and restores 蜀道难", async (t) => {
+  const requestedPaths = [];
+  t.mock.method(globalThis, "fetch", async (input) => {
+    const url = new URL(String(input));
+    requestedPaths.push(url.pathname);
+    if (url.pathname.startsWith("/api/v1/")) {
+      return new Response(JSON.stringify({ error: { message: "Route not found" } }), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+    return new Response(JSON.stringify({ data: [], pagination: { page: 1, pageSize: 10 } }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
+  });
+
+  const result = await callTool("search_poems", {
+    query: "蜀道难",
+    search_type: "title"
+  }, { POETRY_API_BASE: "https://example.test" });
+
+  assert.equal(result.isError, false);
+  assert.deepEqual(requestedPaths, ["/api/v1/poems/search", "/api/search"]);
+  assert.equal(result.structuredContent.data[0].title, "蜀道难");
+  assert.equal(result.structuredContent.data[0].author.name, "李白");
+  assert.equal(result.structuredContent.data[0].dynasty.name, "唐");
+});
+
+test("author search restores 柳永 and 岳飞", async (t) => {
+  t.mock.method(globalThis, "fetch", async (input) => {
+    const url = new URL(String(input));
+    return new Response(JSON.stringify(url.pathname.startsWith("/api/v1/")
+      ? { error: { message: "Route not found" } }
+      : { data: [] }), {
+      status: url.pathname.startsWith("/api/v1/") ? 404 : 200,
+      headers: { "content-type": "application/json" }
+    });
+  });
+
+  for (const author of ["柳永", "岳飞"]) {
+    const result = await callTool("search_poems", {
+      query: author,
+      search_type: "author"
+    }, { POETRY_API_BASE: "https://example.test" });
+    assert.equal(result.isError, false);
+    assert.equal(result.structuredContent.data[0].author.name, author);
+    assert.equal(result.structuredContent.data[0].dynasty.name, "宋");
+  }
+});
+
+test("known authors and poetry types receive canonical dynasties", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({
+    data: [
+      {
+        title: "测试词",
+        author: { name: "柳永" },
+        dynasty: { id: 6, name: "唐" },
+        type: { id: 20, name: "宋词" }
+      },
+      {
+        title: "测试诗",
+        author: { name: "李白" },
+        dynasty: { id: 8, name: "宋" },
+        type: { id: 99, name: "其他" }
+      }
+    ]
+  }), { status: 200, headers: { "content-type": "application/json" } }));
+
+  const result = await callTool("search_poems", { query: "测试" }, {
+    POETRY_API_BASE: "https://example.test"
+  });
+  assert.deepEqual(result.structuredContent.data.map((poem) => poem.dynasty.name), ["宋", "唐"]);
+});
