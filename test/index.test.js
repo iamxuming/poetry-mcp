@@ -139,3 +139,19 @@ test("curated author search survives an upstream error", async (t) => {
   assert.equal(result.structuredContent.data[0].author.name, "柳永");
   assert.equal(result.structuredContent.data[0].dynasty.name, "宋");
 });
+
+
+test("app route serves the MCP-connected poetry page", async () => {
+  const response = await worker.fetch(new Request("https://example.com/app"), {});
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type"), /text\/html/);
+  const html = await response.text();
+  assert.match(html, /古诗词查询/);
+  assert.match(html, /method:"tools\/call"/);
+});
+
+test("open route redirects to the local app", async () => {
+  const response = await worker.fetch(new Request("https://example.com/open"), {});
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get("location"), "https://example.com/app");
+});
