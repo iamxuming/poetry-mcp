@@ -116,3 +116,10 @@ test("known authors and poetry types receive canonical dynasties", async (t) => 
   });
   assert.deepEqual(result.structuredContent.data.map((poem) => poem.dynasty.name), ["宋", "唐"]);
 });
+
+
+test("open route redirects to the poetry UI", async () => {
+  const response = await worker.fetch(new Request("https://example.com/open"), {});
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get("location"), "https://gushi.xumingtech.online/");
+});
